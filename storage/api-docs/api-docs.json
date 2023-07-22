@@ -1,0 +1,22 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Ash TestAPI",
+        "description": "",
+        "contact": {
+            "email": "vetur0220@gmail.com"
+        },
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/TestAPI": {
+            "get": {
+                "responses": {
+                    "200": {
+                        "description": "Display a listing of test!"
+                    }
+                }
+            }
+        }
+    }
+}
