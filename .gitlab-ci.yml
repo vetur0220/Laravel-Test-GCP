@@ -1,0 +1,53 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_HOST: tcp://localhost:2375
+  GCP_ECR: $GCP_ECR
+  GCP_ECR_IMAGE: $GCP_ECR/$GCP_PROJECT/$GCP_ENV_STAGING:$CI_PIPELINE_ID
+  GCP_CLUSTER_PROJECT: $GCP_CLUSTER_PROJECT
+  GCP_REGION: $GCP_REGION
+  GCP_PROJECT: $GCP_PROJECT
+  KUBERNETES_DIR: "./k8s"
+  DEPLOY_FILE_NAME: "deploy.yml"
+
+# 定義 CI/CD pipeline 的階段
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  script:
+    - echo "Testing the Laravel app..."
+    - composer install
+    - vendor/bin/phpunit
+
+# 定義 "build" 階段
+build:
+  image: docker:18.09
+  stage: build
+  services:
+    - docker:18.09-dind
+  before_script:
+    - apk -Uuv add curl bash python
+    - curl https://sdk.cloud.google.com | CLOUDSDK_CORE_DISABLE_PROMPTS=1 bash
+    - export PATH=$PATH:/root/google-cloud-sdk/bin/
+    - gcloud auth activate-service-account --key-file $GCP_KEY_FILE --project=$GCP_PROJECT
+    - gcloud auth configure-docker
+  script:
+    - docker build -t $GCP_ECR_IMAGE .
+    - docker push $GCP_ECR_IMAGE
+
+# 定義 "deploy" 階段
+deploy:
+  image: google/cloud-sdk
+  stage: deploy
+  script:
+    - echo "Deploying the Laravel app to GCP..."
+    before_script:
+    - gcloud auth activate-service-account --key-file $GCP_KEY_FILE --project=$GCP_PROJECT
+    - gcloud container clusters get-credentials $GCP_CLUSTER_PROJECT --region $GCP_REGION --project $GCP_PROJECT
+  script:
+    - FIND=$(find "$KUBERNETES_DIR"  -type f -name "$DEPLOY_FILE_NAME")
+    - echo "$FIND" | xargs -n1 -I{} sed -i  -e 's#_CONTAINER_IMAGE_#'"$GCP_ECR_IMAGE"'#g' {}
+    - kubectl apply -f "$KUBERNETES_DIR/$DEPLOY_FILE_NAME"
